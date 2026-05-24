@@ -1,19 +1,15 @@
 name: sync-cask
 
 on:
-  # Trigger from upstream via 'gh workflow run' or repository_dispatch
-  # (the upstream release workflow can fire a 'release-published' event).
   repository_dispatch:
     types: [release-published]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (no leading v), e.g. 0.2.0-beta.1'
-        required: true
+        description: 'Optional release version (no leading v). If omitted, latest cask from main repo is mirrored.'
+        required: false
         type: string
   schedule:
-    # Hourly fallback so an upstream release is picked up within ~1h even
-    # without a dispatch ping. Cheap; cask repo has no heavy workload.
     - cron: '17 * * * *'
 
 permissions:
@@ -25,76 +21,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve version
-        id: ver
+      - name: Fetch cask from upstream main repo
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -n "${{ github.event.inputs.version || '' }}" ]; then
-            VERSION='${{ github.event.inputs.version }}'
-          elif [ -n "${{ github.event.client_payload.version || '' }}" ]; then
-            VERSION='${{ github.event.client_payload.version }}'
-          else
-            # Fallback: query upstream latest release tag.
-            TAG=$(gh api repos/dmytro-yevs/CopyPaste/releases/latest --jq .tag_name)
-            VERSION="${TAG#v}"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          mkdir -p Casks
+          gh api repos/dmytro-yevs/copypaste/contents/Casks/copypaste.rb \
+            --jq '.content' | base64 -d > Casks/copypaste.rb
+          echo "Fetched upstream cask:"
+          grep -E '^\s*version|^\s*sha256' Casks/copypaste.rb | head -2
 
-      - name: Skip if cask already at this version
-        id: check
+      - name: Detect changes
+        id: diff
         run: |
           set -euo pipefail
-          CURRENT=$(awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ {print $2; exit}' Casks/copypaste.rb)
-          if [ "$CURRENT" = "${{ steps.ver.outputs.version }}" ]; then
-            echo "already at $CURRENT — nothing to do"
+          if git diff --quiet -- Casks/copypaste.rb; then
+            echo "Cask unchanged — nothing to push."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
+            echo "Cask changed:"
+            git --no-pager diff -- Casks/copypaste.rb
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download DMG and compute sha256
-        if: steps.check.outputs.changed == 'true'
-        id: sha
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          set -euo pipefail
-          URL="https://github.com/dmytro-yevs/CopyPaste/releases/download/v${VERSION}/CopyPaste.dmg"
-          curl -fsSL -o /tmp/CopyPaste.dmg "$URL"
-          SHA=$(sha256sum /tmp/CopyPaste.dmg | awk '{print $1}')
-          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
-
-      - name: Bump cask
-        if: steps.check.outputs.changed == 'true'
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
-          SHA256:  ${{ steps.sha.outputs.sha256 }}
-        run: |
-          set -euo pipefail
-          awk -v ver="$VERSION" -v sha="$SHA256" '
-              {
-                  if (match($0, /^([[:space:]]*)version[[:space:]]+"[^"]*"/, m)) {
-                      print m[1] "version \"" ver "\""; next
-                  }
-                  if (match($0, /^([[:space:]]*)sha256[[:space:]]+[^[:space:]]+.*$/, m)) {
-                      print m[1] "sha256 \"" sha "\""; next
-                  }
-                  print
-              }
-          ' Casks/copypaste.rb > Casks/copypaste.rb.new
-          mv Casks/copypaste.rb.new Casks/copypaste.rb
-
       - name: Commit and push
-        if: steps.check.outputs.changed == 'true'
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
+        if: steps.diff.outputs.changed == 'true'
         run: |
           set -euo pipefail
+          VERSION=$(awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ {print $2; exit}' Casks/copypaste.rb)
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add Casks/copypaste.rb
-          git commit -m "chore(cask): bump to $VERSION"
+          git commit -m "chore(cask): sync to ${VERSION} from upstream"
           git push
