@@ -1,6 +1,6 @@
 cask "copypaste" do
-  version "0.3.4"
-  sha256 "043031ade15ad4d10615221acd329afbc843a4bed6b84d718d38478b8c250c7f"
+  version "0.4.0"
+  sha256 "5fd7ecb549e3605d2dbe37e6fca049d9300014db34db87833a56e8de5da3dded"
 
   # DMG filename follows the CI pattern: CopyPaste-v<tag>-macos-arm64.dmg
   # where <tag> already includes the leading 'v', so the prefix becomes 'vv'.
@@ -46,7 +46,16 @@ cask "copypaste" do
     The daemon runs as a LaunchAgent (#{ENV.fetch("USER", "current")} user). Logs at:
       ~/Library/Logs/copypaste/
 
-    First run starts the daemon automatically. To stop:
-      launchctl unload ~/Library/LaunchAgents/com.copypaste.daemon.plist
+    First run starts the daemon automatically.
+
+    To stop the daemon WITHOUT disabling it (so it restarts on next login or
+    app launch), use `bootout` — do NOT use `launchctl unload`/`-w`, which
+    writes a persistent disable override that prevents the daemon from ever
+    starting again:
+      launchctl bootout gui/$(id -u)/com.copypaste.daemon
+
+    To start it again (or recover from a previously disabled state):
+      launchctl enable gui/$(id -u)/com.copypaste.daemon
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.copypaste.daemon.plist
   EOS
 end
