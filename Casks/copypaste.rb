@@ -1,6 +1,6 @@
 cask "copypaste" do
-  version "0.5.0"
-  sha256 "e5c92432880f9470cd112770b4076202be3999c0b059074657f8b651ed6513ac"
+  version "0.5.1"
+  sha256 "dcff72705469dcac0a24a5e9512c6e39f0e074af78cae29d85806403b575621e"
 
   # DMG filename follows the CI pattern: CopyPaste-v<tag>-macos-arm64.dmg
   # where <tag> already includes the leading 'v', so the prefix becomes 'vv'.
@@ -21,12 +21,24 @@ cask "copypaste" do
   app "CopyPaste.app"
 
   postflight do
-    # Strip quarantine (ad-hoc signed builds, no Apple Developer ID)
+    # Strip quarantine (ad-hoc signed builds, no Apple Developer ID).
+    # Must run before any attempt to launch the app or its helpers.
     system_command "/usr/bin/xattr",
                    args: ["-cr", "#{appdir}/CopyPaste.app"]
-    # Load launchd plist if it exists
+
+    # Bootstrap the LaunchAgent if the plist already exists (upgrade path).
+    # Use `launchctl bootstrap` (macOS 13+) rather than the removed
+    # `launchctl load -w` to avoid a non-zero exit that would abort the
+    # postflight and cause Homebrew to roll back the installation.
+    # On a fresh install the plist is written by the app on first launch;
+    # no action is needed here.
     plist = Pathname.new("#{Dir.home}/Library/LaunchAgents/com.copypaste.daemon.plist")
-    system_command "/bin/launchctl", args: ["load", "-w", plist.to_s] if plist.exist?
+    if plist.exist?
+      uid = `id -u`.chomp
+      system_command "/bin/launchctl",
+                     args: ["bootstrap", "gui/#{uid}", plist.to_s],
+                     must_succeed: false
+    end
   end
 
   uninstall launchctl: "com.copypaste.daemon"
@@ -57,5 +69,8 @@ cask "copypaste" do
     To start it again (or recover from a previously disabled state):
       launchctl enable gui/$(id -u)/com.copypaste.daemon
       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.copypaste.daemon.plist
+
+    If a previous upgrade failed and left CopyPaste in a stuck state, recover with:
+      brew reinstall --cask --force copypaste
   EOS
 end
