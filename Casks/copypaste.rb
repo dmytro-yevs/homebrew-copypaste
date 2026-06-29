@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "copypaste" do
-  version "0.3.0"
-  sha256 "2cc615619ea71f93b753f05a2ceefb6a51df1c297e6114889d46c7aa2b0d0356"
+  version "0.3.1"
+  sha256 "4ce5beff3843f6e9a1b486ff05dda0341d8967fb1265f4c3b546858c13426ec7"
 
   # DMG filename follows the CI pattern: CopyPaste-v<version>-macos-arm64.dmg
   # where <version> is bare (build-dmg-ci.sh strips any leading 'v'), so the
@@ -23,14 +23,10 @@ cask "copypaste" do
 
   app "CopyPaste.app"
 
-  postflight do
-    # Strip quarantine (ad-hoc signed builds, no Apple Developer ID).
-    # Must run before any attempt to launch the app or its helpers.
-    # The daemon is NOT bootstrapped here — per ADR-014 the app owns the daemon
-    # lifecycle: it starts the daemon as a child on launch and stops it on quit.
-    system_command "/usr/bin/xattr",
-                   args: ["-cr", "#{appdir}/CopyPaste.app"]
-  end
+  # No postflight quarantine strip needed: the DMG is Developer-ID signed and
+  # notarized by Apple (release.yml: xcrun notarytool submit + xcrun stapler staple).
+  # Gatekeeper accepts a properly stapled notarization ticket without quarantine
+  # removal. xattr -cr on a notarized app would be incorrect and misleading.
 
   uninstall_preflight do
     # Robustness for the "stuck state" left by an earlier broken upgrade.
@@ -65,9 +61,8 @@ cask "copypaste" do
   ]
 
   caveats <<~EOS
-    CopyPaste uses ad-hoc signing (no Apple Developer ID). Homebrew strips
-    the quarantine attribute on install, so you should not see a Gatekeeper
-    warning.
+    CopyPaste is signed with an Apple Developer ID certificate and notarized by
+    Apple. Gatekeeper will accept it without quarantine warnings.
 
     The daemon is managed by the CopyPaste app (ADR-014): it starts automatically
     when you open the app and stops when you quit. No LaunchAgent is installed.
