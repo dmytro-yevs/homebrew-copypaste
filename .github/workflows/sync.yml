@@ -1,19 +1,31 @@
 name: sync-cask
 
+# Mirrors the cask and the formula from the newest release of the main
+# repository into this tap.
+#
+# It used to copy `Casks/copypaste.rb` off that repository's default branch.
+# That file is a template: v2 seeds it with version 0.0.0 and an all-zero
+# sha256 so an unreleased copy cannot install anything, and the release
+# pipeline stamps the real version in as it builds. Mirroring the branch
+# therefore published a cask whose download 404s — and, worse, on a schedule,
+# so it would overwrite a good release within the hour.
+#
+# Release assets are the published artefact, so they are what this reads.
+# Nothing here needs a cross-repository token: the assets are public and the
+# tap's own GITHUB_TOKEN is enough to write this repository.
+
 on:
   repository_dispatch:
     types: [release-published]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Optional release version (no leading v). If omitted, latest cask from main repo is mirrored.'
-        required: false
-        type: string
   schedule:
     - cron: '17 * * * *'
 
 permissions:
   contents: write
+
+env:
+  UPSTREAM: dmytro-yevs/copypaste
 
 jobs:
   sync:
@@ -21,37 +33,57 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch cask from upstream main repo
+      - name: Take the cask and the formula from the newest release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p Casks
-          gh api repos/dmytro-yevs/copypaste/contents/Casks/copypaste.rb \
-            --jq '.content' | base64 -d > Casks/copypaste.rb
-          echo "Fetched upstream cask:"
-          grep -E '^\s*version|^\s*sha256' Casks/copypaste.rb | head -2
 
-      - name: Detect changes
-        id: diff
+          # Not `--latest`: that endpoint hides prereleases, and 2.0.0-alpha.1
+          # is one. Drafts are excluded because their assets are not public.
+          tag="$(gh release list --repo "$UPSTREAM" --limit 20 \
+                   --json tagName,isDraft \
+                   --jq '[.[] | select(.isDraft | not)][0].tagName')"
+          if [[ -z "$tag" ]]; then
+            echo "::error::the upstream repository has published no release yet"
+            exit 1
+          fi
+          echo "Newest release: $tag"
+
+          rm -rf incoming && mkdir -p incoming
+          gh release download "$tag" --repo "$UPSTREAM" --dir incoming \
+            --pattern 'copypaste.rb' --pattern 'copypaste-cli.rb'
+
+      - name: Refuse a cask that cannot install
         run: |
           set -euo pipefail
-          if git diff --quiet -- Casks/copypaste.rb; then
-            echo "Cask unchanged — nothing to push."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Cask changed:"
-            git --no-pager diff -- Casks/copypaste.rb
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          version="$(awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ {print $2; exit}' incoming/copypaste.rb)"
+          sha="$(awk -F'"' '/^[[:space:]]*sha256[[:space:]]+"/ {print $2; exit}' incoming/copypaste.rb)"
+
+          # The exact state this workflow used to publish. Failing here is the
+          # point: a tap serving a 404 is worse than a tap that is stale.
+          if [[ "$version" == "0.0.0" || "$sha" == "0000000000000000000000000000000000000000000000000000000000000000" ]]; then
+            echo "::error::the release carries the unstamped template (version=$version)"
+            exit 1
           fi
+          echo "Publishing $version"
 
       - name: Commit and push
-        if: steps.diff.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          VERSION=$(awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ {print $2; exit}' Casks/copypaste.rb)
+          mkdir -p Casks Formula
+          cp incoming/copypaste.rb      Casks/copypaste.rb
+          cp incoming/copypaste-cli.rb  Formula/copypaste-cli.rb
+          rm -rf incoming
+
+          git add Casks/copypaste.rb Formula/copypaste-cli.rb
+          if git diff --cached --quiet; then
+            echo "Tap already up to date."
+            exit 0
+          fi
+
+          version="$(awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ {print $2; exit}' Casks/copypaste.rb)"
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add Casks/copypaste.rb
-          git commit -m "chore(cask): sync to ${VERSION} from upstream"
+          git commit -m "chore(tap): publish ${version}"
           git push
