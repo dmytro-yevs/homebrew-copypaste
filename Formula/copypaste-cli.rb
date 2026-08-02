@@ -18,7 +18,7 @@
 class CopypasteCli < Formula
   desc "Encrypted clipboard manager — command-line client and daemon"
   homepage "https://github.com/dmytro-yevs/copypaste"
-  version "2.0.0-alpha.2"
+  version "2.0.0-alpha.4"
   license any_of: ["MIT", "Apache-2.0"]
 
   # arm64 only, matching the cask and the release pipeline. `on_intel` is
@@ -27,7 +27,7 @@ class CopypasteCli < Formula
   on_macos do
     on_arm do
       url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/copypaste-cli-v#{version}-macos-arm64.tar.gz"
-      sha256 "43d5508fb65219894933ee20a77a467e6fd14bee9b533a8cbba3714986f9841a"
+      sha256 "9f84ad3eedd87d6905fce3aa6335005d30d9735e70bea82666b7ba252606712e"
     end
   end
 
@@ -38,9 +38,7 @@ class CopypasteCli < Formula
 
   # The daemon does not fork — README is explicit that backgrounding is the
   # service manager's job. Homebrew's `service` DSL generates and manages the
-  # launchd plist, which is why this project ships no plist of its own: v1
-  # hand-wrote com.copypaste.daemon.plist plus an install-agent.sh to load it,
-  # and that is precisely the kind of wheel CLAUDE.md rule 1 exists to stop.
+  # launchd plist, which is why this project ships no plist of its own.
   #
   #   brew services start copypaste-cli
   service do
