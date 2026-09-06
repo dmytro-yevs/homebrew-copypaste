@@ -17,8 +17,8 @@
 # this lives in our own tap, where no such audit runs.
 
 cask "copypaste" do
-  version "2.0.0-alpha.32"
-  sha256 "4de7044bde815fdfea5eb04ced0b149eb729a1774bacdee31e5e6c327b6fef21"
+  version "2.0.0-alpha.34"
+  sha256 "f534cb4a2c177fd608e9f6e7eebd7af9cd32dc0c55b52d1b3c31a38be99c49f3"
 
   url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/CopyPaste-v#{version}-macos-arm64.dmg",
       verified: "github.com/dmytro-yevs/copypaste/"
@@ -119,7 +119,7 @@ cask "copypaste" do
   #
   # This looks gratuitous. It is not: it is the difference between a bad
   # upgrade being self-healing and needing `brew reinstall --force` typed by
-  # hand (CLAUDE.md rule 2).
+  # hand (AGENTS.md rule 2).
   uninstall_preflight do
     app_path = "#{appdir}/CopyPaste.app"
     unless File.exist?(app_path)
@@ -136,8 +136,6 @@ cask "copypaste" do
   #
   zap trash: [
     "~/Library/Application Support/com.copypaste.CopyPaste",
-    "~/Library/Caches/CopyPaste",
-    "~/Library/Logs/CopyPaste",
   ]
 
   caveats <<~EOS
