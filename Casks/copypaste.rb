@@ -7,7 +7,7 @@
 # `version` and `sha256` lines in place and copies the result into the tap.
 # There is deliberately no second copy to drift out of sync.
 #
-# The seeded version below is 0.0.0 with an all-zero sha256, so an unreleased
+# The seeded version below is 1.0.0 with an all-zero sha256, so an unreleased
 # copy of this file cannot install anything: the URL 404s, and if it somehow
 # resolved, checksum verification fails closed rather than being skipped.
 #
@@ -17,11 +17,10 @@
 # this lives in our own tap, where no such audit runs.
 
 cask "copypaste" do
-  version "2.0.0-alpha.38"
-  sha256 "6eadb1eb077e6d99afc225e716914c32d42d4983bb5361c5e88212927e9c672e"
+  version "1.0.0"
+  sha256 "4431b7dd07553eaf18976b63fe6a2cdd5875ff45e297cb06c21dd3135bdc86f7"
 
-  url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/CopyPaste-v#{version}-macos-arm64.dmg",
-      verified: "github.com/dmytro-yevs/copypaste/"
+  url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/CopyPaste-v#{version}-macos-arm64.dmg"
   name "CopyPaste"
   desc "Encrypted clipboard manager with local history and peer sync"
   homepage "https://github.com/dmytro-yevs/copypaste"
@@ -36,7 +35,7 @@ cask "copypaste" do
   # Intel Mac would install a bundle it cannot execute and fail at launch
   # instead of at install, which is the more confusing of the two.
   depends_on arch: :arm64
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   # `brew upgrade` is the update mechanism. ADR-0001 leaves auto-update
   # undecided precisely because Sparkle expects a signed feed.
@@ -79,30 +78,21 @@ cask "copypaste" do
   # still quarantined at this point, and invoking the interpreter explicitly
   # takes Gatekeeper out of the question entirely.
   #
-  # Verified against Homebrew's current source (2026-07-30), not assumed:
-  # `postflight` is still registered from Cask::DSL via ARTIFACT_BLOCK_CLASSES;
-  # `system_command` is still a public method on Cask::DSL::Base alongside the
-  # `appdir` delegator; flight blocks run inside `install_artifacts`, after the
-  # `app` stanza has moved the bundle into place, which is the ordering this
-  # needs. One correction to what was assumed before: `system_command` is
-  # `SystemCommand.run!`, which is must-succeed — a non-zero exit raises and
-  # rolls the install back. That is why the script owns its own fallbacks and
-  # exits non-zero only when the app would genuinely not open, and why the
-  # unguarded `xattr -dr` this block used to run was a latent abort (it exits
-  # non-zero for any file in the tree that has no such attribute).
-  postflight do
-    app_path = "#{appdir}/CopyPaste.app"
-    selfsign = "#{app_path}/Contents/Resources/selfsign.sh"
-
-    if File.exist?(selfsign)
-      system_command "/bin/bash", args: [selfsign, app_path]
-    else
-      # Keep the `|| true` on the xattr call for the must-succeed reason above.
-      system_command "/bin/bash",
-                     args: ["-c",
-                            "/usr/bin/xattr -dr com.apple.quarantine \"$1\" 2>/dev/null || true; " \
-                            "exec /usr/bin/codesign --force --sign - --timestamp=none \"$1\"",
-                            "--", app_path]
+  # Homebrew 7 uses declarative steps. The signing helper also needs access
+  # to the app's own support directory for its persistent local keychain.
+  # A failing run aborts installation, preserving the previous contract.
+  postflight_steps do
+    if_path_exists "CopyPaste.app/Contents/Resources/selfsign.sh", base: :appdir do
+      run "/bin/bash",
+          args: ["{{appdir}}/CopyPaste.app/Contents/Resources/selfsign.sh", "{{appdir}}/CopyPaste.app"],
+          writable_paths: ["~/Library/Application Support/com.copypaste.CopyPaste"]
+    end
+    unless_path_exists "CopyPaste.app/Contents/Resources/selfsign.sh", base: :appdir do
+      run "/bin/bash",
+          args: ["-c",
+                 "/usr/bin/xattr -dr com.apple.quarantine \"$1\" 2>/dev/null || true; " \
+                 "exec /usr/bin/codesign --force --sign - --timestamp=none \"$1\"",
+                 "--", "{{appdir}}/CopyPaste.app"]
     end
   end
 
@@ -113,28 +103,28 @@ cask "copypaste" do
   # there." and aborts the upgrade, leaving the user stuck in the same broken
   # state that caused it.
   #
-  # uninstall_preflight runs before the App artifact's uninstall phase, so
+  # uninstall_preflight_steps runs before the App artifact's uninstall phase, so
   # putting a minimal placeholder there gives the move something to find. It
   # then backs it up, deletes it, and the new version installs over the top.
   #
   # This looks gratuitous. It is not: it is the difference between a bad
   # upgrade being self-healing and needing `brew reinstall --force` typed by
   # hand (AGENTS.md rule 2).
-  uninstall_preflight do
-    app_path = "#{appdir}/CopyPaste.app"
-    unless File.exist?(app_path)
-      system_command "/bin/mkdir", args: ["-p", "#{app_path}/Contents/MacOS"]
+  uninstall_preflight_steps do
+    unless_path_exists "CopyPaste.app", base: :appdir do
+      mkdir_p "CopyPaste.app/Contents/MacOS", base: :appdir
     end
   end
 
-  # `com.copypaste.CopyPaste` is this app's data directory, and `signing/` under
-  # it is selfsign.sh's keychain — so this removes both, which is what `zap`
-  # means. It is not free: a later reinstall generates a new certificate, macOS
+  # Product data and the established signing identity live in separate support
+  # roots. `zap` removes both, which is what an explicit full reset means. It is
+  # not free: a later reinstall generates a new certificate, macOS
   # sees a different app, and any permission has to be granted again. `brew
   # uninstall` leaves the certificate, which is what makes uninstall-then-
   # reinstall keep a grant.
   #
   zap trash: [
+    "~/Library/Application Support/com.copypaste.app",
     "~/Library/Application Support/com.copypaste.CopyPaste",
   ]
 
@@ -145,8 +135,8 @@ cask "copypaste" do
     which stays in your keychain and is never sent anywhere. Updates are signed
     by the same certificate, so macOS keeps treating it as the same app.
 
-    The app requires no Accessibility or Input Monitoring permission. Choosing
-    an item puts it on the clipboard; you press Cmd+V yourself.
+    CopyPaste requests Accessibility only when auto-paste is enabled. Clipboard
+    capture, history, pairing, and ordinary copy continue to work without it.
 
     The command-line tool is a separate formula:
       brew install dmytro-yevs/copypaste/copypaste-cli

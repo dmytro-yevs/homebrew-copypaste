@@ -4,7 +4,7 @@
 #
 # Like Casks/copypaste.rb, this file is both the checked-in source of truth and
 # the template scripts/release/gen-formula.sh rewrites in place. Seeded with
-# 0.0.0 and an all-zero sha256 so an unreleased copy fails closed.
+# 1.0.0 and an all-zero sha256 so an unreleased copy fails closed.
 #
 # A formula rather than a cask because this is a plain pair of binaries, not an
 # .app bundle — and because ADR-0001 notes the distinction matters: Homebrew's
@@ -18,7 +18,7 @@
 class CopypasteCli < Formula
   desc "Encrypted clipboard manager — command-line client and daemon"
   homepage "https://github.com/dmytro-yevs/copypaste"
-  version "2.0.0-alpha.38"
+  version "1.0.0"
   license any_of: ["MIT", "Apache-2.0"]
 
   # arm64 only, matching the cask and the release pipeline. `on_intel` is
@@ -27,7 +27,7 @@ class CopypasteCli < Formula
   on_macos do
     on_arm do
       url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/copypaste-cli-v#{version}-macos-arm64.tar.gz"
-      sha256 "092510e5f31e1b600b745f180c26dc9d8ca2d81e0c5f6a3b0d4276e8339536e3"
+      sha256 "1323253ec62f05dd2dbcf22ff664bea0ba7f1ff3e703c7d12868fa3070fd50a3"
     end
   end
 
