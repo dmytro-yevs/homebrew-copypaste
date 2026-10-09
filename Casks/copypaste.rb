@@ -17,8 +17,8 @@
 # this lives in our own tap, where no such audit runs.
 
 cask "copypaste" do
-  version "1.0.18"
-  sha256 "f0d269bc382f555fef63957fa1a0172ca429dd0cd0729dad34c3ab19ac3884dc"
+  version "1.0.20"
+  sha256 "8fd2b4d2be432a2d85963e56a20bc88ab5c5550182a3d8cdfc9cae16dbd5711e"
 
   url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/CopyPaste-v#{version}-macos-arm64.dmg"
   name "CopyPaste"
