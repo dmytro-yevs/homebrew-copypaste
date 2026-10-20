@@ -18,7 +18,7 @@
 class CopypasteCli < Formula
   desc "Encrypted clipboard manager — command-line client and daemon"
   homepage "https://github.com/dmytro-yevs/copypaste"
-  version "1.0.30"
+  version "1.0.31"
   license any_of: ["MIT", "Apache-2.0"]
 
   # arm64 only, matching the cask and the release pipeline. `on_intel` is
@@ -27,7 +27,7 @@ class CopypasteCli < Formula
   on_macos do
     on_arm do
       url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/copypaste-cli-v#{version}-macos-arm64.tar.gz"
-      sha256 "3df5546e3c07a488109ab2a87afe9752f431ce0e0cb12143d0942e1dc7e80228"
+      sha256 "f36abcab93d44cfdf163540da734996fe5551c4e5035b53b3caff39fb1149d83"
     end
   end
 
