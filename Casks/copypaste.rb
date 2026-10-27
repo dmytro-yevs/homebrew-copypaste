@@ -17,8 +17,8 @@
 # this lives in our own tap, where no such audit runs.
 
 cask "copypaste" do
-  version "1.0.37"
-  sha256 "8034bc302012b15649d41303910099fe98576a1b8954bdd22483c3de04018e98"
+  version "1.1.0"
+  sha256 "2533c135edba6e0fd6aff8c50eae66a5261d6ae89a35e1b3a87da42cb944adbe"
 
   url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/CopyPaste-v#{version}-macos-arm64.dmg"
   name "CopyPaste"
@@ -109,7 +109,7 @@ cask "copypaste" do
   #
   # This looks gratuitous. It is not: it is the difference between a bad
   # upgrade being self-healing and needing `brew reinstall --force` typed by
-  # hand (AGENTS.md rule 2).
+  # hand (the project policy).
   uninstall_preflight_steps do
     unless_path_exists "CopyPaste.app", base: :appdir do
       mkdir_p "CopyPaste.app/Contents/MacOS", base: :appdir
