@@ -17,8 +17,8 @@
 # this lives in our own tap, where no such audit runs.
 
 cask "copypaste" do
-  version "0.1.1"
-  sha256 "ba0c5eaddde567a3e6cbc306b61f94e57629b1b81aa4cee1857da46e2fd147e6"
+  version "0.1.2"
+  sha256 "38509d0881d11448cfab269fe2482b68183edab2f5a4ac9208c6ef6aea730e50"
 
   url "https://github.com/dmytro-yevs/copypaste/releases/download/v#{version}/CopyPaste-v#{version}-macos-arm64.dmg"
   name "CopyPaste"
@@ -114,10 +114,29 @@ cask "copypaste" do
   # uninstall` leaves the certificate, which is what makes uninstall-then-
   # reinstall keep a grant.
   #
-  zap trash: [
-    "~/Library/Application Support/com.copypaste.app",
-    "~/Library/Application Support/com.copypaste.CopyPaste",
-  ]
+  # The script removes the device secret from the login Keychain and the
+  # Privacy & Security grants; both outlive every file below. Either may
+  # already be absent, so neither is required to succeed.
+  zap script: {
+        executable:   "/bin/sh",
+        args:         [
+          "-c",
+          "/usr/bin/security delete-generic-password -s com.copypaste.daemon -a device-secret-key >/dev/null 2>&1; " \
+          "/usr/bin/tccutil reset All com.copypaste.app >/dev/null 2>&1; exit 0",
+        ],
+        must_succeed: false,
+      },
+      trash:  [
+        "~/Library/Application Scripts/com.copypaste.app",
+        "~/Library/Application Support/com.copypaste.app",
+        "~/Library/Application Support/com.copypaste.CopyPaste",
+        "~/Library/Caches/com.copypaste.app",
+        "~/Library/Containers/com.copypaste.app",
+        "~/Library/HTTPStorages/com.copypaste.app",
+        "~/Library/Preferences/com.copypaste.app.plist",
+        "~/Library/Saved Application State/com.copypaste.app.savedState",
+        "~/Library/WebKit/com.copypaste.app",
+      ]
 
   caveats <<~EOS
     CopyPaste is not notarised by Apple — the project has no Apple Developer ID.
